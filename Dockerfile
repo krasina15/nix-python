@@ -1,18 +1,31 @@
 # Use a base image with NixOs
 FROM nixos/nix
 
-# Create a working directory to install a code
-RUN mkdir /app
-WORKDIR /app
+SHELL ["/nix/var/nix/profiles/default/bin/bash", "-c"]
 
-# Need to enable flakes 
-RUN mkdir -p ~/.config/nix && echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
-
-# Fetch data about last conservative updates for fixing bugs and security vulnerabilities 
 RUN nix-channel --update
 
-# Install demo app as flake from github
-RUN nix build github:trustbit/nix-python/0.0.0
+RUN nix-env -f '<nixpkgs>' -iA python310Full python310Packages.pip zlib stdenv.cc.cc.lib
 
-# Run the command to start demo app Flask API
-CMD /app/result/bin/serve
+ENV APP_DIR=/app
+
+RUN mkdir $APP_DIR
+WORKDIR $APP_DIR
+
+# Need to enable flakes 
+#RUN mkdir -p ~/.config/nix && echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+
+RUN git clone https://github.com/krasina15/nix-python.git -b simpleDocker .
+
+ENV VIRTUAL_ENV=$APP_DIR/.venv
+
+RUN python -m venv $VIRTUAL_ENV \
+ && source $VIRTUAL_ENV/bin/activate \
+ && pip install -r requirements.txt .
+
+ENV NIX_LINK=/root/.nix-profile
+ENV LD_LIBRARY_PATH="$NIX_LINK"/lib
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+CMD ["python", "build/lib/nix_python/serve.py"]
+# CMD . /app/.venv/bin/activate && exec python /app/build/lib/nix_python/serve.py
